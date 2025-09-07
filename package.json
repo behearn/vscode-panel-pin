@@ -1,0 +1,121 @@
+{
+  "name": "vscode-panel-pin",
+  "displayName": "Panel Pin",
+  "description": "Resizes the bottom panel height (Problems, Output, Debug Console, Terminal etc) to its smallest size without toggling its visibility. Toggle the pin on the status bar to switch modes. Pin to keep full height, or unpin to enable. ",
+  "version": "0.0.1",
+  "publisher": "brianhearn",
+  "author": {
+    "name": "Brian Hearn"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/behearn/vscode-panel-pin#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/behearn/vscode-panel-pin.git"
+  },
+  "bugs": {
+    "url": "https://github.com/behearn/vscode-panel-pin/issues"
+  },
+  "qna": "marketplace",
+  "icon": "resources/icon.png",
+  "galleryBanner": {
+    "color": "#1e1e1e",
+    "theme": "dark"
+  },
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "extensionKind": [
+    "ui"
+  ],
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "panel",
+    "pin",
+    "resize",
+    "height",
+    "productivity",
+    "workspace",
+    "ui",
+    "auto-resize",
+    "focus",
+    "bottom-panel",
+    "smart-resize",
+    "editor-space",
+    "panel-management",
+    "height-control"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "panelPin.togglePin",
+        "title": "Toggle Panel Pin State",
+        "category": "Panel Pin"
+      },
+      {
+        "command": "panelPin.showDiagnostics",
+        "title": "Show Panel Pin Diagnostics",
+        "category": "Panel Pin"
+      },
+      {
+        "command": "panelPin.reset",
+        "title": "Reset Panel Pin to Default State",
+        "category": "Panel Pin"
+      }
+    ],
+    "configuration": {
+      "title": "Panel Pin",
+      "properties": {
+        "panelPin.defaultPinState": {
+          "type": "boolean",
+          "default": false,
+          "description": "Default pin state for the panel. When false (unpinned), panel auto-resizes to headers-only view."
+        },
+        "panelPin.pinState": {
+          "type": "boolean",
+          "description": "Current pin state of the panel (persisted across sessions). Controls auto-resize behavior."
+        }
+      }
+    },
+    "keybindings": [      
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "compile:watch": "tsc -watch -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "lint:fix": "eslint src --ext ts --fix",    
+    "clean": "rimraf out",
+    "build": "node scripts/build.js",
+    "package": "vsce package --out vscode-panel-pin.vsix",
+    "package:pre-release": "vsce package --pre-release --out vscode-panel-pin-pre.vsix",
+    "publish": "vsce publish",
+    "publish:pre-release": "vsce publish --pre-release",
+    "install-local": "code --install-extension vscode-panel-pin.vsix",
+    "verify-package": "vsce ls"
+  },
+  "devDependencies": {
+    "@types/glob": "^8.0.0",
+    "@types/mocha": "^10.0.1",
+    "@types/node": "16.x",
+    "@types/sinon": "^17.0.4",
+    "@types/vscode": "^1.74.0",
+    "@typescript-eslint/eslint-plugin": "^5.45.0",
+    "@typescript-eslint/parser": "^5.45.0",
+    "@vscode/test-electron": "^2.2.0",
+    "@vscode/vsce": "^2.19.0",
+    "audit-ci": "^6.6.1",
+    "eslint": "^8.28.0",
+    "rimraf": "^5.0.0",
+    "typescript": "^4.9.4"
+  }
+}
