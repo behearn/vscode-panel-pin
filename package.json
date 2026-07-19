@@ -56,6 +56,19 @@
       {
         "command": "panelPin.togglePin",
         "title": "Toggle Panel Pin State",
+        "icon": "$(pin)",
+        "category": "Panel Pin"
+      },
+      {
+        "command": "panelPin.togglePinPinned",
+        "title": "Unpin Panel",
+        "icon": "$(pinned)",
+        "category": "Panel Pin"
+      },
+      {
+        "command": "panelPin.togglePinUnpinned",
+        "title": "Pin Panel",
+        "icon": "$(pin)",
         "category": "Panel Pin"
       },
       {
@@ -69,17 +82,49 @@
         "category": "Panel Pin"
       }
     ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "panelPin.togglePinPinned",
+          "when": "config.panelPin.showPanelTitlePinButton && panelPin.isPinned && view in panelPin.titleBarViews",
+          "group": "navigation@99"
+        },
+        {
+          "command": "panelPin.togglePinUnpinned",
+          "when": "config.panelPin.showPanelTitlePinButton && !panelPin.isPinned && view in panelPin.titleBarViews",
+          "group": "navigation@99"
+        }
+      ]
+    },
     "configuration": {
       "title": "Panel Pin",
       "properties": {
-        "panelPin.defaultPinState": {
+        "panelPin.showStatusBarPinButton": {
           "type": "boolean",
-          "default": false,
-          "description": "Default pin state for the panel. When false (unpinned), panel auto-resizes to headers-only view."
+          "default": true,
+          "scope": "application",
+          "description": "Show the Panel Pin button in the status bar. Disable to use only the panel title button."
         },
-        "panelPin.pinState": {
+        "panelPin.showPanelTitlePinButton": {
           "type": "boolean",
-          "description": "Current pin state of the panel (persisted across sessions). Controls auto-resize behavior."
+          "default": true,
+          "scope": "application",
+          "description": "Show the Panel Pin button in supported panel view title bars (Problems, Output, Debug Console, Terminal). Disable to use only the status bar button."
+        },
+        "panelPin.titleBarViewIds": {
+          "type": "array",
+          "default": [
+            "workbench.panel.markers.view",
+            "workbench.panel.output",
+            "workbench.panel.repl.view",
+            "~remote.forwardedPorts",
+            "terminal"
+          ],
+          "scope": "application",
+          "items": {
+            "type": "string"
+          },
+          "description": "View ids that should show the Panel Pin title-bar button. Add other VS Code view ids here if you want the button in additional panels."
         }
       }
     },
@@ -109,12 +154,12 @@
     "@types/node": "16.x",
     "@types/sinon": "^17.0.4",
     "@types/vscode": "^1.74.0",
-    "@typescript-eslint/eslint-plugin": "^5.45.0",
-    "@typescript-eslint/parser": "^5.45.0",
+    "@typescript-eslint/eslint-plugin": "^8.64.0",
+    "@typescript-eslint/parser": "^8.64.0",
     "@vscode/test-electron": "^2.2.0",
-    "@vscode/vsce": "^2.19.0",
+    "@vscode/vsce": "^3.9.2",
     "audit-ci": "^6.6.1",
-    "eslint": "^8.28.0",
+    "eslint": "^10.7.0",
     "rimraf": "^5.0.0",
     "typescript": "^4.9.4"
   }

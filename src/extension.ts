@@ -12,6 +12,22 @@ let focusMonitor: FocusMonitor;
 let outputChannel: vscode.OutputChannel;
 let errorHandler: ErrorHandler;
 
+async function updatePinContext(isPinned: boolean): Promise<void> {
+	try {
+		await vscode.commands.executeCommand('setContext', 'panelPin.isPinned', isPinned);
+	} catch (error) {
+		outputChannel?.appendLine(`✗ Failed to update pin context: ${error}`);
+	}
+}
+
+async function updateTitleBarViewContext(viewIds: string[]): Promise<void> {
+	try {
+		await vscode.commands.executeCommand('setContext', 'panelPin.titleBarViews', viewIds);
+	} catch (error) {
+		outputChannel?.appendLine(`✗ Failed to update title-bar view context: ${error}`);
+	}
+}
+
 export async function activate(context: vscode.ExtensionContext) {
 	
 	outputChannel = vscode.window.createOutputChannel('Panel Pin');
@@ -24,14 +40,38 @@ export async function activate(context: vscode.ExtensionContext) {
 
 		outputChannel.appendLine('Initializing core components...');
 		
-		settingsManager = new SettingsManager(errorHandler);
+		settingsManager = new SettingsManager(context, errorHandler);
 		outputChannel.appendLine('✓ SettingsManager initialized');
+		const initialConfiguration = settingsManager.getConfiguration();
+
+		const cleanupResult = await settingsManager.runSilentLegacyCleanupOnce();
+		if (cleanupResult) {
+			const removedScopes = [
+				cleanupResult.hadGlobalValue ? 'User' : undefined,
+				cleanupResult.hadWorkspaceValue ? 'Workspace' : undefined,
+				cleanupResult.hadWorkspaceFolderValue ? 'Workspace Folder' : undefined
+			].filter((scope): scope is string => !!scope);
+
+			if (cleanupResult.errors.length > 0) {
+				outputChannel.appendLine(`✗ Silent legacy cleanup warnings: ${cleanupResult.errors.join(' | ')}`);
+			} else if (removedScopes.length > 0) {
+				outputChannel.appendLine(`✓ Silent legacy cleanup removed panelPin.pinState from: ${removedScopes.join(', ')}`);
+			} else {
+				outputChannel.appendLine('✓ Silent legacy cleanup found no panelPin.pinState values to remove');
+			}
+		}
 
 		panelManager = new PanelManager(settingsManager, errorHandler);
 		outputChannel.appendLine('✓ PanelManager initialized ');
 
-		pinToggleUI = new PinToggleUI(panelManager, errorHandler);
+		pinToggleUI = new PinToggleUI(panelManager, initialConfiguration.showStatusBarPinButton, errorHandler);
 		outputChannel.appendLine('✓ PinToggleUI initialized');
+		await updateTitleBarViewContext(initialConfiguration.titleBarViewIds);
+
+		const pinStateSubscription = panelManager.onPinStateChanged((isPinned) => {
+			pinToggleUI.updateState(isPinned);
+			void updatePinContext(isPinned);
+		});
 
 		focusMonitor = new FocusMonitor(errorHandler);
 		outputChannel.appendLine('✓ FocusMonitor initialized');
@@ -47,37 +87,63 @@ export async function activate(context: vscode.ExtensionContext) {
 		outputChannel.appendLine('✓ Focus monitoring started');
 
 
-		outputChannel.appendLine('Restoring panel height state from settings...');
+		outputChannel.appendLine('Resolving startup panel pin state...');
 		await panelManager.restoreState();
-		outputChannel.appendLine(`✓ Panel height state restored (pinned: ${panelManager.isPinned}, resized to headers: ${panelManager.isResizedToHeaders})`);
+		outputChannel.appendLine(`✓ Startup panel pin state resolved (pinned: ${panelManager.isPinned}, resized to headers: ${panelManager.isResizedToHeaders})`);
+		await updatePinContext(panelManager.isPinned);
 
 		outputChannel.appendLine('Initializing pin toggle UI with status bar...');
-		pinToggleUI.show();
-		
-		pinToggleUI.updateState(panelManager.isPinned);
+		pinToggleUI.updateVisibility(initialConfiguration.showStatusBarPinButton);
 		outputChannel.appendLine('✓ Pin toggle UI initialization completed');
 
 		outputChannel.appendLine('Registering commands and event listeners...');
+
+		const executeTogglePin = async () => {
+			outputChannel.appendLine('Toggle pin command executed');
+
+			await panelManager.togglePin();
+
+			const newState = panelManager.isPinned ? 'pinned (normal height)' : 'unpinned (auto-resize)';
+			vscode.window.setStatusBarMessage(`Panel ${newState}`, 2000);
+			outputChannel.appendLine(`✓ Panel ${newState} successfully`);
+			return true;
+		};
 		
 		const toggleCommand = vscode.commands.registerCommand('panelPin.togglePin', async () => {
 			const result = await withErrorHandling(
-				async () => {
-					outputChannel.appendLine('Toggle pin command executed');
-					
-					await panelManager.togglePin();
-					
-					pinToggleUI.updateState(panelManager.isPinned);
-					
-					const newState = panelManager.isPinned ? 'pinned (normal height)' : 'unpinned (auto-resize)';
-					vscode.window.setStatusBarMessage(`Panel ${newState}`, 2000);
-					outputChannel.appendLine(`✓ Panel ${newState} successfully`);
-					
-					return true;
-				},
+				executeTogglePin,
 				errorHandler,
 				ErrorCategory.PANEL_MANIPULATION,
 				'Toggle pin command',
 				{ commandSource: 'user_command' }
+			);
+
+			if (result === null) {
+				vscode.window.showErrorMessage('Failed to toggle pin state. Check Panel Pin logs for details.');
+			}
+		});
+
+		const togglePinnedCommand = vscode.commands.registerCommand('panelPin.togglePinPinned', async () => {
+			const result = await withErrorHandling(
+				executeTogglePin,
+				errorHandler,
+				ErrorCategory.PANEL_MANIPULATION,
+				'Toggle pin command from pinned view button',
+				{ commandSource: 'view_title_button', sourceState: 'pinned' }
+			);
+
+			if (result === null) {
+				vscode.window.showErrorMessage('Failed to toggle pin state. Check Panel Pin logs for details.');
+			}
+		});
+
+		const toggleUnpinnedCommand = vscode.commands.registerCommand('panelPin.togglePinUnpinned', async () => {
+			const result = await withErrorHandling(
+				executeTogglePin,
+				errorHandler,
+				ErrorCategory.PANEL_MANIPULATION,
+				'Toggle pin command from unpinned view button',
+				{ commandSource: 'view_title_button', sourceState: 'unpinned' }
 			);
 
 			if (result === null) {
@@ -176,6 +242,9 @@ export async function activate(context: vscode.ExtensionContext) {
 				outputChannel.appendLine('Panel Pin configuration changed, refreshing settings');
 				try {
 					settingsManager.refresh();
+					const updatedConfiguration = settingsManager.getConfiguration();
+					pinToggleUI.updateVisibility(updatedConfiguration.showStatusBarPinButton);
+					void updateTitleBarViewContext(updatedConfiguration.titleBarViewIds);
 					outputChannel.appendLine('✓ Settings refreshed');
 				} catch (error) {
 					outputChannel.appendLine(`✗ Failed to refresh settings: ${error}`);
@@ -186,9 +255,12 @@ export async function activate(context: vscode.ExtensionContext) {
 
 		context.subscriptions.push(
 			toggleCommand,
+			togglePinnedCommand,
+			toggleUnpinnedCommand,
 			resizeToHeadersCommand,
 			diagnosticCommand,
 			resetCommand,
+			pinStateSubscription,
 			configChangeListener,
 			pinToggleUI,
 			focusMonitor,
@@ -198,10 +270,6 @@ export async function activate(context: vscode.ExtensionContext) {
 		outputChannel.appendLine('✓ All height-based commands and listeners registered');
 		outputChannel.appendLine('Panel Pin extension activated successfully');
 		console.log('Panel Pin extension activated successfully');
-
-		if (context.extensionMode === vscode.ExtensionMode.Development) {
-			vscode.window.showInformationMessage('Panel Pin extension activated successfully');
-		}
 
 	} catch (error) {
 		const activationError = error instanceof Error ? error : new Error(String(error));

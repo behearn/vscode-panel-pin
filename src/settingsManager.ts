@@ -1,36 +1,46 @@
 import * as vscode from 'vscode';
-import { ErrorHandler, ErrorCategory, ErrorSeverity, withErrorHandling } from './errorHandler';
+import { ErrorHandler, ErrorCategory, ErrorSeverity } from './errorHandler';
 
 export interface PanelPinConfiguration {
-    defaultPinState: boolean;
+    showStatusBarPinButton: boolean;
+    showPanelTitlePinButton: boolean;
+    titleBarViewIds: string[];
+}
+
+export interface LegacyPinStateCleanupResult {
+    hadGlobalValue: boolean;
+    hadWorkspaceValue: boolean;
+    hadWorkspaceFolderValue: boolean;
+    errors: string[];
 }
 
 export class SettingsManager {
     private static readonly configurationSection = 'panelPin';
-    private static readonly defaultPinStateKey = 'defaultPinState';
-    private static readonly pinStateKey = 'pinState';
+    private static readonly showStatusBarPinButtonKey = 'showStatusBarPinButton';
+    private static readonly showPanelTitlePinButtonKey = 'showPanelTitlePinButton';
+    private static readonly titleBarViewIdsKey = 'titleBarViewIds';
+    private static readonly legacyPinStateKey = 'pinState';
+    private static readonly lastPinStateStorageKey = 'panelPin.lastPinState';
+    private static readonly legacyCleanupMigrationKey = 'panelPin.legacyPinStateCleanup.v1';
+    private context: vscode.ExtensionContext;
     private errorHandler: ErrorHandler;
     private settingsFailures: number = 0;
     private maxSettingsFailures: number = 3;
 
-    constructor(errorHandler?: ErrorHandler) {
+    constructor(context: vscode.ExtensionContext, errorHandler?: ErrorHandler) {
+        this.context = context;
         this.errorHandler = errorHandler || ErrorHandler.getInstance();
     }
 
     public getPinState(): boolean {
         try {
-            const configuration = vscode.workspace.getConfiguration(SettingsManager.configurationSection);
-            const pinState = configuration.get<boolean>(SettingsManager.pinStateKey);
-            if (pinState !== undefined) {
-                return pinState;
-            }
-            
-            return this.getDefaultPinState();
+            const lastPinState = this.context.globalState.get<boolean>(SettingsManager.lastPinStateStorageKey);
+            return lastPinState ?? false;
         } catch (error) {
             this.errorHandler.handleSimpleError(
                 ErrorCategory.SETTINGS_PERSISTENCE,
                 ErrorSeverity.MEDIUM,
-                'Failed to get pin state from settings, using default',
+                'Failed to resolve saved pin state, using unpinned fallback',
                 error instanceof Error ? error : new Error(String(error)),
                 { fallbackToDefault: true }
             );
@@ -39,69 +49,60 @@ export class SettingsManager {
     }
 
     public async setPinState(pinned: boolean): Promise<void> {
-        
-        const configuration = vscode.workspace.getConfiguration(SettingsManager.configurationSection);
-        let workspaceError: Error | undefined;
-        let globalError: Error | undefined;
-
         try {
-            await configuration.update(
-                SettingsManager.pinStateKey, 
-                pinned, 
-                vscode.ConfigurationTarget.Workspace
-            );
+            await this.context.globalState.update(SettingsManager.lastPinStateStorageKey, pinned);
             this.settingsFailures = 0; // Reset failure count on success
             return;
         } catch (error) {
-            workspaceError = error instanceof Error ? error : new Error(String(error));
-            this.errorHandler.handleSimpleError(
-                ErrorCategory.SETTINGS_PERSISTENCE,
-                ErrorSeverity.LOW,
-                'Failed to save pin state to workspace settings, trying global',
-                workspaceError,
-                { pinState: pinned, target: 'workspace' }
-            );
-        }
-
-        try {
-            await configuration.update(
-                SettingsManager.pinStateKey, 
-                pinned, 
-                vscode.ConfigurationTarget.Global
-            );
-            this.settingsFailures = 0; // Reset failure count on success
-            return;
-        } catch (error) {
-            globalError = error instanceof Error ? error : new Error(String(error));
+            const globalStateError = error instanceof Error ? error : new Error(String(error));
             this.settingsFailures++;
-            
+
             this.errorHandler.handleSimpleError(
                 ErrorCategory.SETTINGS_PERSISTENCE,
                 this.settingsFailures >= this.maxSettingsFailures ? ErrorSeverity.HIGH : ErrorSeverity.MEDIUM,
-                'Failed to save pin state to both workspace and global settings',
-                globalError,
-                { 
-                    pinState: pinned, 
-                    workspaceError: workspaceError?.message,
-                    globalError: globalError?.message,
+                'Failed to save pin state to extension global state',
+                globalStateError,
+                {
+                    pinState: pinned,
                     failureCount: this.settingsFailures
                 }
             );
-            
-            throw new Error(`Failed to save pin state: ${globalError.message}`);
+
+            throw new Error(`Failed to save pin state: ${globalStateError.message}`);
         }
     }
 
-    public getDefaultPinState(): boolean {
-        const configuration = vscode.workspace.getConfiguration(SettingsManager.configurationSection);
-        return configuration.get<boolean>(SettingsManager.defaultPinStateKey, false);
-    }
-
-
     public getConfiguration(): PanelPinConfiguration {
         return {
-            defaultPinState: this.getDefaultPinState()
+            showStatusBarPinButton: this.getShowStatusBarPinButton(),
+            showPanelTitlePinButton: this.getShowPanelTitlePinButton(),
+            titleBarViewIds: this.getTitleBarViewIds()
         };
+    }
+
+    public getShowStatusBarPinButton(): boolean {
+        const configuration = vscode.workspace.getConfiguration(SettingsManager.configurationSection);
+        return configuration.get<boolean>(SettingsManager.showStatusBarPinButtonKey, true);
+    }
+
+    public getShowPanelTitlePinButton(): boolean {
+        const configuration = vscode.workspace.getConfiguration(SettingsManager.configurationSection);
+        return configuration.get<boolean>(SettingsManager.showPanelTitlePinButtonKey, true);
+    }
+
+    public getTitleBarViewIds(): string[] {
+        const configuration = vscode.workspace.getConfiguration(SettingsManager.configurationSection);
+        const configuredViewIds = configuration.get<string[]>(SettingsManager.titleBarViewIdsKey, [
+            'workbench.panel.markers.view',
+            'workbench.panel.output',
+            'workbench.panel.repl.view',
+            '~remote.forwardedPorts',
+            'terminal'
+        ]);
+
+        return configuredViewIds
+            .map(viewId => viewId.trim())
+            .filter((viewId, index, viewIds) => viewId.length > 0 && viewIds.indexOf(viewId) === index);
     }
 
     public refresh(): void {
@@ -109,56 +110,102 @@ export class SettingsManager {
     }
 
     public async resetPinState(): Promise<void> {
-        const configuration = vscode.workspace.getConfiguration(SettingsManager.configurationSection);
-        let workspaceError: Error | undefined;
-        let globalError: Error | undefined;
-
         try {
-            await configuration.update(
-                SettingsManager.pinStateKey, 
-                undefined, 
-                vscode.ConfigurationTarget.Workspace
-            );
+            await this.context.globalState.update(SettingsManager.lastPinStateStorageKey, undefined);
             return;
         } catch (error) {
-            workspaceError = error instanceof Error ? error : new Error(String(error));
-            this.errorHandler.handleSimpleError(
-                ErrorCategory.SETTINGS_PERSISTENCE,
-                ErrorSeverity.LOW,
-                'Failed to reset pin state in workspace settings, trying global',
-                workspaceError,
-                { target: 'workspace' }
-            );
-        }
-
-        try {
-            await configuration.update(
-                SettingsManager.pinStateKey, 
-                undefined, 
-                vscode.ConfigurationTarget.Global
-            );
-        } catch (error) {
-            globalError = error instanceof Error ? error : new Error(String(error));
             this.errorHandler.handleSimpleError(
                 ErrorCategory.SETTINGS_PERSISTENCE,
                 ErrorSeverity.HIGH,
-                'Failed to reset pin state in both workspace and global settings',
-                globalError,
-                { 
-                    workspaceError: workspaceError?.message,
-                    globalError: globalError?.message
-                }
+                'Failed to reset pin state in extension global state',
+                error instanceof Error ? error : new Error(String(error))
             );
-            throw new Error(`Failed to reset pin state: ${globalError.message}`);
+            throw error;
         }
     }
 
+    public async cleanupLegacyPinStateSetting(): Promise<LegacyPinStateCleanupResult> {
+        const configuration = vscode.workspace.getConfiguration(SettingsManager.configurationSection);
+        const inspected = configuration.inspect<boolean>(SettingsManager.legacyPinStateKey);
+
+        const result: LegacyPinStateCleanupResult = {
+            hadGlobalValue: inspected?.globalValue !== undefined,
+            hadWorkspaceValue: inspected?.workspaceValue !== undefined,
+            hadWorkspaceFolderValue: inspected?.workspaceFolderValue !== undefined,
+            errors: []
+        };
+
+        if (result.hadGlobalValue) {
+            try {
+                await configuration.update(SettingsManager.legacyPinStateKey, undefined, vscode.ConfigurationTarget.Global);
+            } catch (error) {
+                result.errors.push(`global: ${error instanceof Error ? error.message : String(error)}`);
+            }
+        }
+
+        if (result.hadWorkspaceValue) {
+            try {
+                await configuration.update(SettingsManager.legacyPinStateKey, undefined, vscode.ConfigurationTarget.Workspace);
+            } catch (error) {
+                result.errors.push(`workspace: ${error instanceof Error ? error.message : String(error)}`);
+            }
+        }
+
+        if (result.hadWorkspaceFolderValue) {
+            try {
+                await configuration.update(SettingsManager.legacyPinStateKey, undefined, vscode.ConfigurationTarget.WorkspaceFolder);
+            } catch (error) {
+                result.errors.push(`workspaceFolder: ${error instanceof Error ? error.message : String(error)}`);
+            }
+        }
+
+        if (result.errors.length > 0) {
+            this.errorHandler.handleSimpleError(
+                ErrorCategory.SETTINGS_PERSISTENCE,
+                ErrorSeverity.MEDIUM,
+                'Legacy pin state cleanup completed with errors',
+                new Error(result.errors.join('; ')),
+                {
+                    hadGlobalValue: result.hadGlobalValue,
+                    hadWorkspaceValue: result.hadWorkspaceValue,
+                    hadWorkspaceFolderValue: result.hadWorkspaceFolderValue
+                }
+            );
+        }
+
+        return result;
+    }
+
+    public async runSilentLegacyCleanupOnce(): Promise<LegacyPinStateCleanupResult | undefined> {
+        const alreadyMigrated = this.context.globalState.get<boolean>(SettingsManager.legacyCleanupMigrationKey, false);
+        if (alreadyMigrated) {
+            return undefined;
+        }
+
+        const result = await this.cleanupLegacyPinStateSetting();
+
+        if (result.errors.length === 0) {
+            await this.context.globalState.update(SettingsManager.legacyCleanupMigrationKey, true);
+        }
+
+        return result;
+    }
+
     public getDiagnosticInfo(): Record<string, any> {
+        const configuration = vscode.workspace.getConfiguration(SettingsManager.configurationSection);
+        const legacyPinStateInspect = configuration.inspect<boolean>(SettingsManager.legacyPinStateKey);
+
         return {
             configurationSection: SettingsManager.configurationSection,
             settingsFailures: this.settingsFailures,
             maxFailures: this.maxSettingsFailures,
             currentConfiguration: this.getConfiguration(),
+            hasPersistedLastState: this.context.globalState.get<boolean>(SettingsManager.lastPinStateStorageKey) !== undefined,
+            legacyPinStatePresent: {
+                global: legacyPinStateInspect?.globalValue !== undefined,
+                workspace: legacyPinStateInspect?.workspaceValue !== undefined,
+                workspaceFolder: legacyPinStateInspect?.workspaceFolderValue !== undefined
+            },
             hasWorkspace: !!vscode.workspace.workspaceFolders?.length
         };
     }
