@@ -2,7 +2,7 @@
   "name": "vscode-panel-pin",
   "displayName": "Panel Pin",
   "description": "Resizes the bottom panel height (Problems, Output, Debug Console, Terminal etc) to its smallest size without toggling its visibility. Toggle the pin on the status bar to switch modes. Pin to keep full height, or unpin to enable. ",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "publisher": "brianhearn",
   "author": {
     "name": "Brian Hearn"

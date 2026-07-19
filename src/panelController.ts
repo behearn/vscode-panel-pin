@@ -34,7 +34,6 @@ export class PanelController {
             await this.initialize();
         }
         try {            
-            await vscode.commands.executeCommand('workbench.action.terminal.focus');
             for (let i = 0; i < 25; i++) {
                 await vscode.commands.executeCommand('workbench.action.terminal.resizePaneDown');
                 await new Promise(resolve => setTimeout(resolve, 5));
@@ -55,7 +54,6 @@ export class PanelController {
             await this.initialize();
         }
         try {
-            await vscode.commands.executeCommand('workbench.action.terminal.focus');
             for (let i = 0; i < 5; i++) {
                 await vscode.commands.executeCommand('workbench.action.terminal.resizePaneUp');
                 await new Promise(resolve => setTimeout(resolve, 5));

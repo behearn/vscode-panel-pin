@@ -30,25 +30,14 @@ export class FocusMonitor implements IFocusMonitor {
         try {
             this.isMonitoring = true;
 
-            const selectionChangeDisposable = vscode.window.onDidChangeTextEditorSelection(() => {
-                const editor = vscode.window.activeTextEditor;
-                let docType = 'unknown';
-                let docLang = 'unknown';
-                let docUri = '';
-                if (editor && editor.document) {
-                    docType = editor.document.uri.scheme;
-                    docLang = editor.document.languageId;
-                    docUri = editor.document.uri.toString();
-                }
+            const activeEditorChangeDisposable = vscode.window.onDidChangeActiveTextEditor((editor) => {
                 if (editor && editor.document && editor.document.uri.scheme === 'file') {
-                    //console.log(`=== SELECTION CHANGE - EDITOR HAS FOCUS (code editor) === [lang=${docLang}] [uri=${docUri}]`);
+                    // Only react to actual editor focus changes, not typing/cursor movement.
                     this.debounceEditorFocus(editor);
-                } else {
-                    //console.log(`=== SELECTION CHANGE - IGNORED (not a code editor) === [scheme=${docType}] [lang=${docLang}] [uri=${docUri}]`);
                 }
             });
 
-            this.disposables.push(selectionChangeDisposable);
+            this.disposables.push(activeEditorChangeDisposable);
 
             this.errorHandler.handleSimpleError(
                 ErrorCategory.FOCUS_MONITORING,

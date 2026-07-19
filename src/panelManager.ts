@@ -153,8 +153,8 @@ export class PanelManager implements IPanelManager {
 
     public connectFocusMonitor(focusMonitor: any): void {
         focusMonitor.onEditorFocus(() => {
-            if (!this._isPinned) {
-                this.resizeToHeaders();
+            if (!this._isPinned && !this._isResizedToHeaders) {
+                void this.resizeToHeaders();
             }
         });
     }
