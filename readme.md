@@ -6,17 +6,15 @@ This convenient extension automatically moves the bottom panel (Problems, Output
 
 Adds a pin icon to collapse the bottom panel when a code editor window gets focus.
 
-By default, Panel Pin shows both a status bar button and title-bar buttons on a configurable list of panel views. The button icon switches between pinned and unpinned states. 
+By default, Panel Pin shows both a status bar button and title-bar buttons on a configurable list of panel views. The button icon switches between pinned and unpinned states.
 
-![Title Bar](https://brianhearncom.blob.core.windows.net/vscode-panel-pin/title-bar.png)
+![Title Bar](https://brianhearncom.blob.core.windows.net/vscode-panel-pin/title-bar.png?v=2)
 
-![Status Bar](https://brianhearncom.blob.core.windows.net/vscode-panel-pin/unpinned.png)
-
-You can opt out of either in User Settings.  
+![Bottom Panel](https://brianhearncom.blob.core.windows.net/vscode-panel-pin/bottom-panel.png?v=2)
 
 When **unpinned** automatically resizes the bottom panel to its **smallest size** when the code editor gets focus without toggling its visibility.
 
-![Bottom Panel](https://brianhearncom.blob.core.windows.net/vscode-panel-pin/bottom-panel.png)
+![Status Bar](https://brianhearncom.blob.core.windows.net/vscode-panel-pin/unpinned.png?v=2)
 
 The panel must be resized manually to restore its height.
 
