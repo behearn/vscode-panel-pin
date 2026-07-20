@@ -5,6 +5,8 @@ export class PanelController {
     private _errorHandler: ErrorHandler;
     private _isInitialized: boolean = false;
     private _panelVisible: boolean = true;
+    private _resizeToHeadersPromise: Promise<void> | null = null;
+    private _resizeToFullPromise: Promise<void> | null = null;
 
     constructor(errorHandler?: ErrorHandler) {
         this._errorHandler = errorHandler || ErrorHandler.getInstance();
@@ -29,43 +31,42 @@ export class PanelController {
         }
     }
 
-    public async resizeToHeaders(): Promise<void> {
+    public async resizeToHeaders(iterations: number = 50): Promise<void> {
         if (!this._isInitialized) {
             await this.initialize();
         }
-        try {            
-            for (let i = 0; i < 25; i++) {
-                await vscode.commands.executeCommand('workbench.action.terminal.resizePaneDown');
-                await new Promise(resolve => setTimeout(resolve, 5));
-            }
-        } catch (error) {
-            console.log('Error during resize to headers:', error);
-            this._errorHandler.handleSimpleError(
-                ErrorCategory.PANEL_MANIPULATION,
-                ErrorSeverity.MEDIUM,
-                'Failed to resize panel to headers',
-                error instanceof Error ? error : new Error(String(error))
-            );
+        if (this._resizeToHeadersPromise) {
+            return this._resizeToHeadersPromise;
         }
+
+        this._resizeToHeadersPromise = this.runResizeSequence(
+            'workbench.action.increaseViewHeight',
+            iterations,
+            'headers'
+        ).finally(() => {
+            this._resizeToHeadersPromise = null;
+        });
+
+        return this._resizeToHeadersPromise;
     }
 
-    public async resizeToFull(): Promise<void> {
+    public async resizeToFull(iterations: number = 5): Promise<void> {
         if (!this._isInitialized) {
             await this.initialize();
         }
-        try {
-            for (let i = 0; i < 5; i++) {
-                await vscode.commands.executeCommand('workbench.action.terminal.resizePaneUp');
-                await new Promise(resolve => setTimeout(resolve, 5));
-            }
-        } catch (error) {
-            this._errorHandler.handleSimpleError(
-                ErrorCategory.PANEL_MANIPULATION,
-                ErrorSeverity.MEDIUM,
-                'Failed to resize panel to full height',
-                error instanceof Error ? error : new Error(String(error))
-            );
+        if (this._resizeToFullPromise) {
+            return this._resizeToFullPromise;
         }
+
+        this._resizeToFullPromise = this.runResizeSequence(
+            'workbench.action.decreaseViewHeight',
+            iterations,
+            'full height'
+        ).finally(() => {
+            this._resizeToFullPromise = null;
+        });
+
+        return this._resizeToFullPromise;
     }
 
     public isInitialized(): boolean {
@@ -118,5 +119,28 @@ export class PanelController {
             isInitialized: this._isInitialized,
             panelVisible: this._panelVisible
         };
+    }
+
+    private async runResizeSequence(commandId: string, iterations: number, targetLabel: string): Promise<void> {
+        try {
+            await this.focusPanel(targetLabel);
+
+            for (let i = 0; i < iterations; i++) {
+                await vscode.commands.executeCommand(commandId);
+            }
+        } catch (error) {
+            console.log(`Error during resize to ${targetLabel}:`, error);
+            this._errorHandler.handleSimpleError(
+                ErrorCategory.PANEL_MANIPULATION,
+                ErrorSeverity.MEDIUM,
+                `Failed to resize panel to ${targetLabel}`,
+                error instanceof Error ? error : new Error(String(error))
+            );
+        }
+    }
+
+    private async focusPanel(targetLabel: string): Promise<void> {
+        await vscode.commands.executeCommand('workbench.action.focusPanel');
+        await new Promise(resolve => setTimeout(resolve, 25));
     }
 }

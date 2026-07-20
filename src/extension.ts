@@ -42,6 +42,18 @@ export async function activate(context: vscode.ExtensionContext) {
 		
 		settingsManager = new SettingsManager(context, errorHandler);
 		outputChannel.appendLine('✓ SettingsManager initialized');
+
+		const defaultBooleanMigrationResult = await settingsManager.migrateDefaultBooleanSettingsOnce();
+		if (defaultBooleanMigrationResult) {
+			if (defaultBooleanMigrationResult.migrated) {
+				outputChannel.appendLine('✓ Default boolean settings migration applied');
+			} else if (defaultBooleanMigrationResult.hadExplicitValue) {
+				outputChannel.appendLine('✓ Default boolean settings migration skipped because explicit values already exist');
+			} else {
+				outputChannel.appendLine('✓ Default boolean settings migration found nothing to update');
+			}
+		}
+
 		const initialConfiguration = settingsManager.getConfiguration();
 
 		const cleanupResult = await settingsManager.runSilentLegacyCleanupOnce();
@@ -64,7 +76,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		panelManager = new PanelManager(settingsManager, errorHandler);
 		outputChannel.appendLine('✓ PanelManager initialized ');
 
-		pinToggleUI = new PinToggleUI(panelManager, initialConfiguration.showStatusBarPinButton, errorHandler);
+		pinToggleUI = new PinToggleUI(panelManager, initialConfiguration.showStatusBarPinButton, errorHandler, outputChannel);
 		outputChannel.appendLine('✓ PinToggleUI initialized');
 		await updateTitleBarViewContext(initialConfiguration.titleBarViewIds);
 
@@ -99,13 +111,10 @@ export async function activate(context: vscode.ExtensionContext) {
 		outputChannel.appendLine('Registering commands and event listeners...');
 
 		const executeTogglePin = async () => {
-			outputChannel.appendLine('Toggle pin command executed');
-
 			await panelManager.togglePin();
 
 			const newState = panelManager.isPinned ? 'pinned (normal height)' : 'unpinned (auto-resize)';
 			vscode.window.setStatusBarMessage(`Panel ${newState}`, 2000);
-			outputChannel.appendLine(`✓ Panel ${newState} successfully`);
 			return true;
 		};
 		

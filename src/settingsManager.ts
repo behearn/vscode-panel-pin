@@ -5,6 +5,7 @@ export interface PanelPinConfiguration {
     showStatusBarPinButton: boolean;
     showPanelTitlePinButton: boolean;
     titleBarViewIds: string[];
+    resizeStepCount: number;
 }
 
 export interface LegacyPinStateCleanupResult {
@@ -14,14 +15,22 @@ export interface LegacyPinStateCleanupResult {
     errors: string[];
 }
 
+export interface DefaultBooleanSettingsMigrationResult {
+    migrated: boolean;
+    hadExplicitValue: boolean;
+    errors: string[];
+}
+
 export class SettingsManager {
     private static readonly configurationSection = 'panelPin';
     private static readonly showStatusBarPinButtonKey = 'showStatusBarPinButton';
     private static readonly showPanelTitlePinButtonKey = 'showPanelTitlePinButton';
     private static readonly titleBarViewIdsKey = 'titleBarViewIds';
+    private static readonly resizeStepCountKey = 'resizeStepCount';
     private static readonly legacyPinStateKey = 'pinState';
     private static readonly lastPinStateStorageKey = 'panelPin.lastPinState';
     private static readonly legacyCleanupMigrationKey = 'panelPin.legacyPinStateCleanup.v1';
+    private static readonly defaultBooleanSettingsMigrationKey = 'panelPin.defaultBooleanSettingsMigration.v1';
     private context: vscode.ExtensionContext;
     private errorHandler: ErrorHandler;
     private settingsFailures: number = 0;
@@ -76,8 +85,20 @@ export class SettingsManager {
         return {
             showStatusBarPinButton: this.getShowStatusBarPinButton(),
             showPanelTitlePinButton: this.getShowPanelTitlePinButton(),
-            titleBarViewIds: this.getTitleBarViewIds()
+            titleBarViewIds: this.getTitleBarViewIds(),
+            resizeStepCount: this.getResizeStepCount()
         };
+    }
+
+    public getResizeStepCount(): number {
+        const configuration = vscode.workspace.getConfiguration(SettingsManager.configurationSection);
+        const configuredStepCount = configuration.get<number>(SettingsManager.resizeStepCountKey, 16);
+
+        if (!Number.isFinite(configuredStepCount)) {
+            return 16;
+        }
+
+        return Math.max(0, Math.min(50, Math.floor(configuredStepCount)));
     }
 
     public getShowStatusBarPinButton(): boolean {
@@ -122,6 +143,67 @@ export class SettingsManager {
             );
             throw error;
         }
+    }
+
+    public async migrateDefaultBooleanSettingsOnce(): Promise<DefaultBooleanSettingsMigrationResult | undefined> {
+        const alreadyMigrated = this.context.globalState.get<boolean>(SettingsManager.defaultBooleanSettingsMigrationKey, false);
+        if (alreadyMigrated) {
+            return undefined;
+        }
+
+        const showStatusBarInspect = vscode.workspace.getConfiguration(SettingsManager.configurationSection).inspect<boolean>(SettingsManager.showStatusBarPinButtonKey);
+        const showPanelTitleInspect = vscode.workspace.getConfiguration(SettingsManager.configurationSection).inspect<boolean>(SettingsManager.showPanelTitlePinButtonKey);
+
+        const hadExplicitValue =
+            showStatusBarInspect?.globalValue !== undefined ||
+            showStatusBarInspect?.workspaceValue !== undefined ||
+            showStatusBarInspect?.workspaceFolderValue !== undefined ||
+            showPanelTitleInspect?.globalValue !== undefined ||
+            showPanelTitleInspect?.workspaceValue !== undefined ||
+            showPanelTitleInspect?.workspaceFolderValue !== undefined;
+
+        const result: DefaultBooleanSettingsMigrationResult = {
+            migrated: false,
+            hadExplicitValue,
+            errors: []
+        };
+
+        if (!hadExplicitValue) {
+            try {
+                const configuration = vscode.workspace.getConfiguration(SettingsManager.configurationSection);
+                await configuration.update(SettingsManager.showStatusBarPinButtonKey, true, vscode.ConfigurationTarget.Global);
+            } catch (error) {
+                result.errors.push(`showStatusBarPinButton: ${error instanceof Error ? error.message : String(error)}`);
+            }
+
+            try {
+                const configuration = vscode.workspace.getConfiguration(SettingsManager.configurationSection);
+                await configuration.update(SettingsManager.showPanelTitlePinButtonKey, true, vscode.ConfigurationTarget.Global);
+            } catch (error) {
+                result.errors.push(`showPanelTitlePinButton: ${error instanceof Error ? error.message : String(error)}`);
+            }
+
+            result.migrated = result.errors.length === 0;
+        }
+
+        if (result.migrated || (hadExplicitValue && result.errors.length === 0)) {
+            await this.context.globalState.update(SettingsManager.defaultBooleanSettingsMigrationKey, true);
+        }
+
+        if (result.errors.length > 0) {
+            this.errorHandler.handleSimpleError(
+                ErrorCategory.SETTINGS_PERSISTENCE,
+                ErrorSeverity.MEDIUM,
+                'Default boolean settings migration completed with errors',
+                new Error(result.errors.join('; ')),
+                {
+                    hadExplicitValue,
+                    migrated: result.migrated
+                }
+            );
+        }
+
+        return result;
     }
 
     public async cleanupLegacyPinStateSetting(): Promise<LegacyPinStateCleanupResult> {
@@ -201,6 +283,7 @@ export class SettingsManager {
             maxFailures: this.maxSettingsFailures,
             currentConfiguration: this.getConfiguration(),
             hasPersistedLastState: this.context.globalState.get<boolean>(SettingsManager.lastPinStateStorageKey) !== undefined,
+            resizeStepCount: this.getResizeStepCount(),
             legacyPinStatePresent: {
                 global: legacyPinStateInspect?.globalValue !== undefined,
                 workspace: legacyPinStateInspect?.workspaceValue !== undefined,

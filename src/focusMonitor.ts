@@ -39,13 +39,7 @@ export class FocusMonitor implements IFocusMonitor {
 
             this.disposables.push(activeEditorChangeDisposable);
 
-            this.errorHandler.handleSimpleError(
-                ErrorCategory.FOCUS_MONITORING,
-                ErrorSeverity.LOW,
-                'Focus monitoring started successfully',
-                undefined,
-                { debounceDelay: this.debounceDelay }
-            );
+            // Initialization is reported by the extension activation log.
         } catch (error) {
             this.isMonitoring = false;
             this.errorHandler.handleSimpleError(

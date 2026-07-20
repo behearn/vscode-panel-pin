@@ -14,26 +14,20 @@ export class PinToggleUI implements IPinToggleUI {
     private _panelManager: PanelManager;
     private _disposables: vscode.Disposable[] = [];
     private _errorHandler: ErrorHandler;
+    private _outputChannel: vscode.OutputChannel | null;
     private _uiUpdateFailures: number = 0;
     private _maxUIUpdateFailures: number = 3;
     private _statusBarItem: vscode.StatusBarItem | null = null;
 
-    constructor(panelManager: PanelManager, showStatusBarButton: boolean = true, errorHandler?: ErrorHandler) {
+    constructor(panelManager: PanelManager, showStatusBarButton: boolean = true, errorHandler?: ErrorHandler, outputChannel?: vscode.OutputChannel) {
         this._panelManager = panelManager;
         this._errorHandler = errorHandler || ErrorHandler.getInstance();
+        this._outputChannel = outputChannel || null;
 
         try {
             this.createStatusBarItem(showStatusBarButton);
 
-            this._errorHandler.handleSimpleError(
-                ErrorCategory.UI_COMPONENT,
-                ErrorSeverity.LOW,
-                'PinToggleUI initialized with status bar item',
-                undefined,
-                {
-                    initialPinState: this._panelManager.isPinned
-                }
-            );
+            this._outputChannel?.appendLine(`[PinToggleUI] Initialized with status bar item (initialPinState=${this._panelManager.isPinned})`);
 
         } catch (error) {
             this._errorHandler.handleSimpleError(
@@ -62,18 +56,6 @@ export class PinToggleUI implements IPinToggleUI {
     public updateState(isPinned: boolean): void {
         try {
             this.updateStatusBarItem(isPinned);
-
-            this._errorHandler.handleSimpleError(
-                ErrorCategory.UI_COMPONENT,
-                ErrorSeverity.LOW,
-                'Pin state updated in status bar',
-                undefined,
-                {
-                    isPinned,
-                    mode: 'status_bar',
-                    statusBarVisible: !!this._statusBarItem
-                }
-            );
 
             this._uiUpdateFailures = 0; // Reset failure count on success
 
@@ -104,17 +86,6 @@ export class PinToggleUI implements IPinToggleUI {
             } else {
                 this._statusBarItem.hide();
             }
-
-            this._errorHandler.handleSimpleError(
-                ErrorCategory.UI_COMPONENT,
-                ErrorSeverity.LOW,
-                'Status bar pin button visibility updated',
-                undefined,
-                {
-                    showStatusBarButton,
-                    statusBarVisible: showStatusBarButton
-                }
-            );
         } catch (error) {
             this._errorHandler.handleSimpleError(
                 ErrorCategory.UI_COMPONENT,
@@ -159,13 +130,7 @@ export class PinToggleUI implements IPinToggleUI {
                 this._statusBarItem.hide();
             }
 
-            this._errorHandler.handleSimpleError(
-                ErrorCategory.UI_COMPONENT,
-                ErrorSeverity.LOW,
-                'Status bar item created successfully',
-                undefined,
-                { command: 'panelPin.togglePin', showStatusBarButton }
-            );
+            this._outputChannel?.appendLine(`[PinToggleUI] Status bar item created (showStatusBarButton=${showStatusBarButton})`);
 
         } catch (error) {
             this._errorHandler.handleSimpleError(

@@ -2,7 +2,7 @@
   "name": "vscode-panel-pin",
   "displayName": "Panel Pin",
   "description": "Resizes the bottom panel height (Problems, Output, Debug Console, Terminal etc) to its smallest size without toggling its visibility. Toggle the pin on the status bar to switch modes. Pin to keep full height, or unpin to enable. ",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "publisher": "brianhearn",
   "author": {
     "name": "Brian Hearn"
@@ -125,6 +125,14 @@
             "type": "string"
           },
           "description": "View ids that should show the Panel Pin title-bar button. Add other VS Code view ids here if you want the button in additional panels."
+        },
+        "panelPin.resizeStepCount": {
+          "type": "number",
+          "default": 5,
+          "minimum": 0,
+          "maximum": 20,
+          "scope": "application",
+          "description": "How many height adjustment steps Panel Pin uses when expanding the bottom panel after pinning. Set to 0 to disable automatic expansion and control the height manually. Unpinning always collapses the panel as far down as possible without hiding it."
         }
       }
     },

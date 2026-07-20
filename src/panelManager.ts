@@ -62,16 +62,17 @@ export class PanelManager implements IPanelManager {
     public async togglePin(): Promise<void> {
         try {
             this._isPinned = !this._isPinned;
+            this._onPinStateChanged.fire(this._isPinned);
 
             if (this._isPinned) {
-                await this._panelController.resizeToFull();
+                await this._panelController.resizeToFull(this.getResizeIterations());
                 this._isResizedToHeaders = false;
             } else {
-                await this._panelController.resizeToHeaders();                
                 this._isResizedToHeaders = true;
+                this._onResizeStateChanged.fire(true);
+                void this._panelController.resizeToHeaders();
             }
 
-            this._onPinStateChanged.fire(this._isPinned);
             await this.saveState();
 
         } catch (error) {
@@ -108,7 +109,7 @@ export class PanelManager implements IPanelManager {
             await this._panelController.initialize();
 
             if (this._isPinned) {
-                await this._panelController.resizeToFull();
+                await this._panelController.resizeToFull(this.getResizeIterations());
                 this._isResizedToHeaders = false;
             } else {
                 await this._panelController.resizeToHeaders();
@@ -131,10 +132,6 @@ export class PanelManager implements IPanelManager {
     public async saveState(): Promise<void> {
         try {
             await this._settingsManager.setPinState(this._isPinned);
-
-            if ((this._errorHandler as any).outputChannel) {
-                (this._errorHandler as any).outputChannel.appendLine(`[PanelManager] Panel state saved successfully (isPinned=${this._isPinned})`);
-            }
         } catch (error) {
             this._errorHandler.handleSimpleError(
                 ErrorCategory.PANEL_MANIPULATION,
@@ -153,10 +150,18 @@ export class PanelManager implements IPanelManager {
 
     public connectFocusMonitor(focusMonitor: any): void {
         focusMonitor.onEditorFocus(() => {
-            if (!this._isPinned && !this._isResizedToHeaders) {
-                void this.resizeToHeaders();
+            this._lastFocusTime = Date.now();
+
+            if (!this._isPinned) {
+                void this._panelController.resizeToHeaders();
+                this._isResizedToHeaders = true;
+                this._onResizeStateChanged.fire(true);
             }
         });
+    }
+
+    private getResizeIterations(): number {
+        return this._settingsManager.getResizeStepCount();
     }
 
     public setPinState(pinned: boolean): void {

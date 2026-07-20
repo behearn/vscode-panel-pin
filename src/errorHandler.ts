@@ -53,8 +53,13 @@ export class ErrorHandler {
         if (!errorInfo.timestamp) {
             errorInfo.timestamp = new Date();
         }
+
+        if (errorInfo.severity === ErrorSeverity.LOW && !errorInfo.originalError && (!errorInfo.context || Object.keys(errorInfo.context).length === 0)) {
+            return;
+        }
+
         this.logError(errorInfo);
-        this.updateErrorCount(errorInfo.category);
+        this.updateErrorCount(errorInfo);
         this.addToErrorHistory(errorInfo);
         this.showUserNotification(errorInfo);        
     }
@@ -139,11 +144,22 @@ export class ErrorHandler {
         }
     }
 
-    private updateErrorCount(category: ErrorCategory): void {
+    private updateErrorCount(errorInfo: ErrorInfo): void {
+        const category = errorInfo.category;
         const currentCount = this.errorCount.get(category) || 0;
         const newCount = currentCount + 1;
         this.errorCount.set(category, newCount);
-        this.outputChannel.appendLine(`[ErrorHandler] Error count for ${category}: ${newCount}`);
+        const detailParts: string[] = [`severity=${errorInfo.severity}`, `message=${errorInfo.message}`];
+
+        if (errorInfo.originalError) {
+            detailParts.push(`originalError=${errorInfo.originalError.message}`);
+        }
+
+        if (errorInfo.context && Object.keys(errorInfo.context).length > 0) {
+            detailParts.push(`context=${JSON.stringify(errorInfo.context)}`);
+        }
+
+        this.outputChannel.appendLine(`[ErrorHandler] Error count for ${category}: ${newCount} (${detailParts.join(', ')})`);
         if (category === ErrorCategory.PANEL_MANIPULATION) {
             const stack = new Error().stack;
             this.outputChannel.appendLine(`[ErrorHandler][DEBUG] PANEL_MANIPULATION incremented. Stack:\n${stack}`);

@@ -20,6 +20,10 @@ The panel must be resized manually to restore its height.
 
 When **pinned** the panel remains at its set height.
 
+If the panel still feels too large or too small after pinning, adjust `panelPin.resizeStepCount` in settings. Unpinning always collapses the panel as far down as possible without hiding it, and pinning expands it by the configured number of steps.
+
+Known limitation: VS Code does not expose the panel's live size to extensions, so pinning a panel that you resized manually will increase it by the configured number of steps rather than restoring the exact previous height.
+
 ## Button Placement
 
 The title-bar buttons are contributed to panel views through `view/title`. They are right-aligned in VS Code's `navigation` group, which is the closest supported placement to the built-in view controls.
